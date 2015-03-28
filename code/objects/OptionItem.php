@@ -8,7 +8,7 @@
 class OptionItem extends DataObject{
 
 	private static $db = array(
-		'Title' => 'Text',
+		'Title' => 'Varchar(200)',
 		'WeightModifier' => 'Int',
 		'CodeModifier' => 'Text',
 		'PriceModifier' => 'Currency',
