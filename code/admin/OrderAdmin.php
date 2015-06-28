@@ -20,7 +20,7 @@ class OrderAdmin extends ModelAdmin {
         $config = $gridField->getConfig();
 
         // remove edit icon
-        $config->removeComponentsByType('GridFieldEditButton');
+        //$config->removeComponentsByType('GridFieldEditButton');
 
         return $form;
     }
