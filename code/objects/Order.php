@@ -193,11 +193,11 @@ class Order extends DataObject implements PermissionProvider{
                 $OrderDetail = OrderDetail::create();
 
                 $OrderDetail->Quantity = (int) $detail->product_quantity;
-                $OrderDetail->Price = (float) $detail->product_price;
                 $OrderDetail->ProductName = (string) $detail->product_name;
                 $OrderDetail->ProductCode = (string) $detail->product_code;
                 $OrderDetail->ProductImage = (string) $detail->image;
                 $OrderDetail->ProductCategory = (string) $detail->category_code;
+                $priceModifier = 0;
 
                 // parse OrderOptions
                 foreach ($detail->transaction_detail_options->transaction_detail_option as $option) {
@@ -217,9 +217,12 @@ class Order extends DataObject implements PermissionProvider{
                         $OrderOption->write();
                         $OrderDetail->OrderOptions()->add($OrderOption);
 
+                        $priceModifier += $option->price_mod;
                     }
 
                 }
+
+                $OrderDetail->Price = (float) $detail->product_price + (float) $priceModifier;
 
                 // extend OrderDetail parsing, allowing for recording custom fields from FoxyCart
                 $this->extend('handleOrderItem', $order, $response, $OrderDetail);
