@@ -150,8 +150,11 @@ class FoxyStripe_Controller extends Page_Controller {
 
     public function parseOrderDetails($order, $response) {
 
-        // remove previous OrderDetails so we don't end up with duplicates
+        // remove previous OrderDetails and OrderOptions so we don't end up with duplicates
         foreach ($order->Details() as $detail) {
+            foreach ($detail->OrderOptions() as $orderOption) {
+                $orderOption->delete();
+            }
             $detail->delete();
         }
 
