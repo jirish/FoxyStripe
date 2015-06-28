@@ -11,7 +11,8 @@ class FoxyStripe_Controller extends Page_Controller {
 	static $allowed_actions = array(
 		'index',
         'sso',
-        'parseOrders'
+        'parseOrders',
+        'encryptResponse'
 	);
 	
 	public function index() {
@@ -41,24 +42,24 @@ class FoxyStripe_Controller extends Page_Controller {
         $orders = simplexml_load_string($decrypted, NULL, LIBXML_NOCDATA);
 
         // loop over each transaction to find FoxyCart Order ID
-        foreach ($orders->transactions->transaction as $order) {
+        foreach ($orders->transactions->transaction as $transaction) {
 
             // if FoxyCart order id, then parse order
-            if (isset($order->id)) {
+            if (isset($transaction->id)) {
 
-                ($transaction = Order::get()->filter('Order_ID', (int) $order->id)->First()) ?
-                    $transaction = Order::get()->filter('Order_ID', (int) $order->id)->First() :
-                    $transaction = Order::create();
+                ($order = Order::get()->filter('Order_ID', (int) $transaction->id)->First()) ?
+                    $order = Order::get()->filter('Order_ID', (int) $transaction->id)->First() :
+                    $order = Order::create();
 
                 // save base order info
-                $transaction->Order_ID = (int) $order->id;
-                $transaction->Response = $decrypted;
+                $order->Order_ID = (int) $transaction->id;
+                $order->Response = urlencode($encrypted);
 
                 // record transaction as order
-                $transaction->write();
+                $order->write();
 
                 // parse order
-                $result = $this->parseOrder($transaction->ID);
+                $this->parseOrder($order->ID);
             }
 
         }
@@ -66,23 +67,21 @@ class FoxyStripe_Controller extends Page_Controller {
 
     public function parseOrder($id) {
 
-        if ($transaction = Order::get()->byID($id)) {
+        if ($order = Order::get()->byID($id)) {
 
-            if (($transaction->Response)) {
+            if ($order->Response) {
 
-                // grab response, parse as XML
-                $orders = new SimpleXMLElement($transaction->Response);
+                // grab response, decrypt, parse as XML
+                $decrypted = urldecode($order->Response);
+                $decrypted = rc4crypt::decrypt(FoxyCart::getStoreKey(), $decrypted);
+                $response = new SimpleXMLElement($decrypted);
 
-
-
-                $this->parseOrderInfo($orders, $transaction);
-                $this->parseOrderCustomer($orders, $transaction);
-                // record transaction so user info can be accessed from parseOrderDetails()
-                $transaction->write();
-                $this->parseOrderDetails($orders, $transaction);
+                $this->parseOrderInfo($order, $response);
+                $this->parseOrderCustomer($order, $response);
+                $this->parseOrderDetails($order, $response);
 
                 // record transaction as order
-                $transaction->write();
+                $order->write();
 
                 return true;
 
@@ -94,33 +93,33 @@ class FoxyStripe_Controller extends Page_Controller {
         }
     }
 
-    public function parseOrderInfo($orders, $transaction) {
+    public function parseOrderInfo($order, $response) {
 
-        foreach ($orders->transactions->transaction as $order) {
+        foreach ($response->transactions->transaction as $transaction) {
 
             // Record transaction data from FoxyCart Datafeed:
-            $transaction->Store_ID = (int)$order->store_id;
-            $transaction->TransactionDate = (string)$order->transaction_date;
-            $transaction->ProductTotal = (float)$order->product_total;
-            $transaction->TaxTotal = (float)$order->tax_total;
-            $transaction->ShippingTotal = (float)$order->shipping_total;
-            $transaction->OrderTotal = (float)$order->order_total;
-            $transaction->ReceiptURL = (string)$order->receipt_url;
-            $transaction->OrderStatus = (string)$order->status;
+            $order->Store_ID = (int) $transaction->store_id;
+            $order->TransactionDate = (string) $transaction->transaction_date;
+            $order->ProductTotal = (float) $transaction->product_total;
+            $order->TaxTotal = (float) $transaction->tax_total;
+            $order->ShippingTotal = (float) $transaction->shipping_total;
+            $order->OrderTotal = (float) $transaction->order_total;
+            $order->ReceiptURL = (string) $transaction->receipt_url;
+            $order->OrderStatus = (string) $transaction->status;
         }
     }
 
-    public function parseOrderCustomer($orders, $transaction) {
+    public function parseOrderCustomer($order, $response) {
 
-        foreach ($orders->transactions->transaction as $order) {
+        foreach ($response->transactions->transaction as $transaction) {
 
             // if not a guest transaction in FoxyCart
-            if (isset($order->customer_email) && $order->is_anonymous == 0) {
+            if (isset($transaction->customer_email) && $transaction->is_anonymous == 0) {
 
                 // if Customer is existing member, associate with current order
-                if(Member::get()->filter('Email', $order->customer_email)->First()) {
+                if(Member::get()->filter('Email', $transaction->customer_email)->First()) {
 
-                    $customer = Member::get()->filter('Email', $order->customer_email)->First();
+                    $customer = Member::get()->filter('Email', $transaction->customer_email)->First();
 
                 // if new customer, create account with data from FoxyCart
                 } else {
@@ -130,12 +129,12 @@ class FoxyStripe_Controller extends Page_Controller {
 
                     // create new Member, set password info from FoxyCart
                     $customer = Member::create();
-                    $customer->Customer_ID = (int)$order->customer_id;
-                    $customer->FirstName = (string)$order->customer_first_name;
-                    $customer->Surname = (string)$order->customer_last_name;
-                    $customer->Email = (string)$order->customer_email;
-                    $customer->Password = (string)$order->customer_password;
-                    $customer->Salt = (string)$order->customer_password_salt;
+                    $customer->Customer_ID = (int) $transaction->customer_id;
+                    $customer->FirstName = (string) $transaction->customer_first_name;
+                    $customer->Surname = (string) $transaction->customer_last_name;
+                    $customer->Email = (string) $transaction->customer_email;
+                    $customer->Password = (string) $transaction->customer_password;
+                    $customer->Salt = (string) $transaction->customer_password_salt;
                     $customer->PasswordEncryption = 'none';
 
                     // record member record
@@ -143,50 +142,40 @@ class FoxyStripe_Controller extends Page_Controller {
                 }
 
                 // set Order MemberID
-                $transaction->MemberID = $customer->ID;
+                $order->MemberID = $customer->ID;
 
             }
         }
     }
 
-    public function parseOrderDetails($orders, $transaction) {
+    public function parseOrderDetails($order, $response) {
 
         // remove previous OrderDetails so we don't end up with duplicates
-        foreach ($transaction->Details() as $detail) {
+        foreach ($order->Details() as $detail) {
             $detail->delete();
         }
 
-        foreach ($orders->transactions->transaction as $order) {
+        foreach ($response->transactions->transaction as $transaction) {
 
             // Associate ProductPages, Options, Quantity with Order
-            foreach ($order->transaction_details->transaction_detail as $product) {
+            foreach ($transaction->transaction_details->transaction_detail as $detail) {
 
                 $OrderDetail = OrderDetail::create();
 
-                // set Quantity
-                $OrderDetail->Quantity = (int)$product->product_quantity;
-
-                // set calculated price (after option modifiers)
-                $OrderDetail->Price = (float)$product->product_price;
-
-                $OrderDetail->ProductName = (string)$product->product_name;
-                $OrderDetail->ProductCode = (string)$product->product_code;
-                $OrderDetail->ProductImage = (string)$product->image;
-                $OrderDetail->ProductCategory = (string)$product->category_code;
+                $OrderDetail->Quantity = (int) $detail->product_quantity;
+                $OrderDetail->Price = (float) $detail->product_price;
+                $OrderDetail->ProductName = (string) $detail->product_name;
+                $OrderDetail->ProductCode = (string) $detail->product_code;
+                $OrderDetail->ProductImage = (string) $detail->image;
+                $OrderDetail->ProductCategory = (string) $detail->category_code;
 
                 // Find product via product_id custom variable
-                foreach ($product->transaction_detail_options->transaction_detail_option as $option) {
+                foreach ($detail->transaction_detail_options->transaction_detail_option as $option) {
                     if ($option->product_option_name == 'product_id') {
 
-                        $OrderProduct = ProductPage::get()
-                            ->filter('ID', (int)$option->product_option_value)
-                            ->First();
-
-                        // if product could be found, then set Option Items
-                        if ($OrderProduct) {
-                            // set ProductID
-                            $OrderDetail->ProductID = $OrderProduct->ID;
-                        }
+                        // if product could be found, set relation to OrderDetail
+                        $OrderProduct = ProductPage::get()->byID((int) $option->product_option_value);
+                        if ($OrderProduct) $OrderDetail->ProductID = $OrderProduct->ID;
 
                     } else {
 
@@ -199,15 +188,16 @@ class FoxyStripe_Controller extends Page_Controller {
                     }
 
                     // associate with this order
-                    $OrderDetail->OrderID = $transaction->ID;
-
-                    // extend OrderDetail parsing, allowing for recording custom fields from FoxyCart
-                    $this->extend('handleOrderItem', $decrypted, $product, $OrderDetail);
-
-                    // write
-                    $OrderDetail->write();
+                    $OrderDetail->OrderID = $order->ID;
 
                 }
+
+                // extend OrderDetail parsing, allowing for recording custom fields from FoxyCart
+                $this->extend('handleOrderItem', $order, $response, $OrderDetail);
+
+                // write
+                $OrderDetail->write();
+
             }
         }
     }
@@ -242,43 +232,49 @@ class FoxyStripe_Controller extends Page_Controller {
 
 
     /*
-	 * Get the current DataObject Item from the ID if one exists
-	 */
-    public function getCurrentItemByID($itemID = null) {
-
-
-        if($itemID) {
-            return Order::get()->byID($itemID);
-        } elseif(isset($params['ID'])) {
-            //Sanitize
-            $ID = Convert::raw2sql($params['ID']);
-
-            return Order::get()->filter("ID", $ID)->first();
-        }
-    }
-
-    /*
      * Re-parse all Orders from XML in Response field
      */
     public function parseOrders() {
         if (Permission::check('Product_ORDERS')) {
-            $params = $this->request->allParams();
-            if (isset($params['ID'])) {
 
-                $ID = Convert::raw2sql($params['ID']);
-                $order = Order::get()->byID($ID);
-                debug::show($order);
-                $this->parseOrder($order->ID);
-                return 'Order Updated';
-
-            } else {
-
-                $ct = 0;
-                foreach (Order::get() as $order) {
-                    if ($this->parseOrder($order->ID)) $ct++;
-                }
-                return $ct . ' orders updated';
+            $ct = 0;
+            foreach (Order::get() as $order) {
+                if ($this->parseOrder($order->ID)) $ct++;
             }
+            return $ct . ' orders updated';
+
+        } else {
+            return Security::permissionFailure();
+        }
+    }
+
+    /*
+     * encrypt responses that were saved unencrypted
+     */
+    public function encryptResponse() {
+
+        if (Permission::check('Product_ORDERS')) {
+
+            $ct = 0;
+            $needle = '<?xml version="1.0" encoding="UTF-8"';
+            $needle2 = "<?xml version='1.0' encoding='UTF-8'";
+            $length = strlen($needle);
+
+            foreach (Order::get() as $order) {
+
+                if (substr($order->Response, 0, $length) === $needle || substr($order->Response, 0, $length) === $needle2) {
+
+                    $encrypted = rc4crypt::encrypt(FoxyCart::getStoreKey(), $order->Response);
+                    $encrypted = urlencode($encrypted);
+
+                    $order->Response = $encrypted;
+                    $order->write();
+                    $ct++;
+                }
+
+            }
+            return $ct . ' order responses encrypted';
+
         } else {
             return Security::permissionFailure();
         }
