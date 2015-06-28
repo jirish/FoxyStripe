@@ -32,8 +32,8 @@ class Order extends DataObject implements PermissionProvider{
         'TransactionDate.NiceUS',
         'Member.Name',
         'ProductTotal.Nice',
-        'TaxTotal.Nice',
         'ShippingTotal.Nice',
+        'TaxTotal.Nice',
         'OrderTotal.Nice',
         'ReceiptLink'
     );

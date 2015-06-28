@@ -39,7 +39,7 @@ class FoxyStripe_Controller extends Page_Controller {
     public function handleDataFeed($encrypted, $decrypted){
 
         //handle encrypted & decrypted data
-        $orders = simplexml_load_string($decrypted, NULL, LIBXML_NOCDATA);
+        $orders = new SimpleXMLElement($decrypted);
 
         // loop over each transaction to find FoxyCart Order ID
         foreach ($orders->transactions->transaction as $transaction) {
@@ -106,6 +106,8 @@ class FoxyStripe_Controller extends Page_Controller {
             $order->OrderTotal = (float) $transaction->order_total;
             $order->ReceiptURL = (string) $transaction->receipt_url;
             $order->OrderStatus = (string) $transaction->status;
+
+            $this->extend('handleOrderInfo', $order, $response);
         }
     }
 
@@ -143,6 +145,8 @@ class FoxyStripe_Controller extends Page_Controller {
 
                 // set Order MemberID
                 $order->MemberID = $customer->ID;
+
+                $this->extend('handleOrderCustomer', $order, $response, $customer);
 
             }
         }
@@ -190,10 +194,12 @@ class FoxyStripe_Controller extends Page_Controller {
 
                     }
 
-                    // associate with this order
-                    $OrderDetail->OrderID = $order->ID;
+                    $this->extend('handleOrderOption', $order, $response, $OrderDetail, $option);
 
                 }
+
+                // associate with this order
+                $OrderDetail->OrderID = $order->ID;
 
                 // extend OrderDetail parsing, allowing for recording custom fields from FoxyCart
                 $this->extend('handleOrderItem', $order, $response, $OrderDetail);
