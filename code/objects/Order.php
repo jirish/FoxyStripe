@@ -91,13 +91,13 @@ class Order extends DataObject implements PermissionProvider{
 	}
 
 	public function canEdit($member = null) {
-        return Permission::check('Product_ORDERS');
-        //return false;
+        return false;
+        //return Permission::check('Product_ORDERS');
 	}
 
 	public function canDelete($member = null) {
-        //return false;
-        return Permission::check('Product_ORDERS');
+        return false;
+        //return Permission::check('Product_ORDERS');
 	}
 
 	public function canCreate($member = null) {

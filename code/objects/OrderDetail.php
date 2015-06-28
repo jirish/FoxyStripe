@@ -58,8 +58,8 @@ class OrderDetail extends DataObject {
 	}
 
 	public function canEdit($member = null) {
-        return Permission::check('Product_ORDERS');
-        //return false;
+        return false;
+        //return Permission::check('Product_ORDERS');
 	}
 
 	public function canDelete($member = null) {
