@@ -10,8 +10,7 @@ class FoxyStripe_Controller extends Page_Controller {
 	
 	static $allowed_actions = array(
 		'index',
-        'sso',
-        'encryptResponse'
+        'sso'
 	);
 	
 	public function index() {
@@ -58,15 +57,10 @@ class FoxyStripe_Controller extends Page_Controller {
                 $order->Response = urlencode($encrypted);
                 $order->write();
 
-                // parse order
-                $order->parseOrder();
             }
 
         }
     }
-
-
-
 
 
 	// Single Sign on integration with FoxyCart
@@ -93,38 +87,6 @@ class FoxyStripe_Controller extends Page_Controller {
 	
 	    $this->redirect($redirect_complete);
 
-    }
-
-    /*
-     * encrypt responses that were saved unencrypted
-     */
-    public function encryptResponse() {
-
-        if (Permission::check('Product_ORDERS')) {
-
-            $ct = 0;
-            $needle = '<?xml version="1.0" encoding="UTF-8"';
-            $needle2 = "<?xml version='1.0' encoding='UTF-8'";
-            $length = strlen($needle);
-
-            foreach (Order::get() as $order) {
-
-                if (substr($order->Response, 0, $length) === $needle || substr($order->Response, 0, $length) === $needle2) {
-
-                    $encrypted = rc4crypt::encrypt(FoxyCart::getStoreKey(), $order->Response);
-                    $encrypted = urlencode($encrypted);
-
-                    $order->Response = $encrypted;
-                    $order->write();
-                    $ct++;
-                }
-
-            }
-            return $ct . ' order responses encrypted';
-
-        } else {
-            return Security::permissionFailure();
-        }
     }
 	
 }

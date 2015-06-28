@@ -91,21 +91,21 @@ class Order extends DataObject implements PermissionProvider{
         return rc4crypt::decrypt(FoxyCart::getStoreKey(), $decrypted);
     }
 
+    public function onBeforeWrite() {
+
+        $this->parseOrder();
+        parent::onBeforeWrite();
+    }
+
     public function parseOrder() {
 
-        if ($this->Response) {
+        if ($this->getDecryptedResponse()) {
 
-            // grab response, decrypt, parse as XML
-            $decrypted = urldecode($this->Response);
-            $decrypted = rc4crypt::decrypt(FoxyCart::getStoreKey(), $decrypted);
-            $response = new SimpleXMLElement($decrypted);
+            $response = new SimpleXMLElement($this->getDecryptedResponse());
 
             $this->parseOrderInfo($response);
             $this->parseOrderCustomer($response);
             $this->parseOrderDetails($response);
-
-            // record transaction as order
-            $this->write();
 
             return true;
 
@@ -247,8 +247,8 @@ class Order extends DataObject implements PermissionProvider{
 	}
 
 	public function canDelete($member = null) {
-        return false;
-        //return Permission::check('Product_ORDERS');
+        //return false;
+        return Permission::check('Product_ORDERS');
 	}
 
 	public function canCreate($member = null) {

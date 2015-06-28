@@ -9,7 +9,10 @@ class ParseOrdersTask extends BuildTask
 
         $ct = 0;
         foreach (Order::get() as $order) {
-            if ($order->parseOrder()) $ct++;
+            if ($order->parseOrder()) {
+                $order->write();
+                $ct++;
+            }
         }
         echo $ct . ' orders updated';
 
