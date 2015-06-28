@@ -14,15 +14,12 @@
 
         <% if $Orders %>
             <% loop $Orders %>
-                <div class="line">
-                    <h3>Order #{$Order_ID}</h3>
-                    <p>
-                        $TransactionDate.NiceUS | <a href="$ReceiptURL" target="_blank">View Invoice</a>
-                    </p>
-                </div>
                 <div class="historySummary line">
                     <div class="size1of4 unit">
-
+                        <h3>Order #{$Order_ID}</h3>
+                        <p>
+                            $TransactionDate.NiceUS | <a href="$ReceiptURL" target="_blank">View Invoice</a>
+                        </p>
 
                         <table width="100%">
                             <tr>
@@ -44,6 +41,7 @@
                         </table>
                     </div>
                     <div class="size3of4 lastUnit">
+                        <h3>Your Items</h3>
 	                    <% loop $Details %>
                             <div class="unit size1of5 productSummaryImage">
                                 <% if $Product %>
