@@ -219,12 +219,7 @@ class Order extends DataObject implements PermissionProvider{
 
                     }
 
-                    $this->extend('handleOrderOption', $order, $response, $OrderDetail, $option);
-
                 }
-
-                // associate with this order
-                $OrderDetail->OrderID = $this->ID;
 
                 // extend OrderDetail parsing, allowing for recording custom fields from FoxyCart
                 $this->extend('handleOrderItem', $order, $response, $OrderDetail);
@@ -232,6 +227,8 @@ class Order extends DataObject implements PermissionProvider{
                 // write
                 $OrderDetail->write();
 
+                // associate with this order
+                $this->Details()->add($OrderDetail);
             }
         }
     }
